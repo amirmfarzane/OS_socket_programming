@@ -11,6 +11,7 @@
 #include <stdio.h>
 
 #define BUFFER_SIZE 1024
+#define sever_port_val 7094
 
 
 int setupServer(int port) {
@@ -70,7 +71,7 @@ int main(int argc, char const *argv[]) {
 
     //sever 
     int server_fd,max_sd;
-    server_fd = setupServer(7092);
+    server_fd = setupServer(sever_port_val);
 
 
     //set ::::
@@ -216,7 +217,7 @@ int main(int argc, char const *argv[]) {
         // }
         }
         close(port);
-        close(7092);
+        close(sever_port_val);
 
     
 
