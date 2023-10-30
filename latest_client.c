@@ -31,7 +31,7 @@ int connectServer(int port)
 
 #define BUFFER_SIZE 1024
 int main(int argc, char const *argv[]) {
-    int port = argv[1];
+    int port = atoi(argv[1]);
     int udp_sock, broadcast = 1, opt = 1;
 
     //inter name:
@@ -73,11 +73,11 @@ int main(int argc, char const *argv[]) {
     setsockopt(udp_sock, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
 
     bc_address.sin_family = AF_INET; 
-    bc_address.sin_port = htons(8090); 
+    bc_address.sin_port = htons(port); 
     bc_address.sin_addr.s_addr = inet_addr("255.255.255.255");
 
-    int connect_server;
-    connect_server = connectServer(7090);
+    int connected_server_fd;
+    connected_server_fd = connectServer(7091);
 
     FD_SET(udp_sock, &master_set);
     FD_SET(0, &master_set);
@@ -111,7 +111,14 @@ int main(int argc, char const *argv[]) {
                 else if(i == 0){
                     char input_r[BUFFER_SIZE] ;
                     int bytes_input_r = read(0,input_r,BUFFER_SIZE);
-                    sendto(udp_sock, input_r, bytes_input_r, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+
+                    if(input_r[0] == 's'){
+                        sendto(connected_server_fd, input_r, bytes_input_r, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                    }
+                    
+                    else{
+                        sendto(udp_sock, input_r, bytes_input_r, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                    }
                     // write(1 , input_r , bytes_input_r);
                     
                 }
@@ -139,7 +146,7 @@ int main(int argc, char const *argv[]) {
             }
         }
     }
-    close(8090);
-    close(7090);
+    close(port);
+    close(7091);
     return 0;
 }
