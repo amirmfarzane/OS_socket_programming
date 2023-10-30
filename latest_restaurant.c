@@ -9,9 +9,11 @@
 #include <signal.h>
 #include <sys/ioctl.h>
 #include <stdio.h>
+#include <arpa/inet.h>
 
 #define BUFFER_SIZE 1024
-#define sever_port_val 7094
+#define sever_port_val 1024 + rand()%(49151-1024+1)
+
 
 
 int setupServer(int port) {
@@ -42,17 +44,7 @@ int acceptClient(int server_fd) {
     return client_fd;
 }
 
-// void handle_input(){
-//     char buff[1024];
-//     read(0,)
-
-// }
-
-int main(int argc, char const *argv[]) {
-    int port = atoi(argv[1]);
-    int udp_sock, broadcast = 1, opt = 1;
-
-    //inter name:
+char* get_usename(){
     char* enter_name = "Please enter your username:";
     write(1 , enter_name , strlen(enter_name));
     char name[BUFFER_SIZE] =  {0};
@@ -60,14 +52,23 @@ int main(int argc, char const *argv[]) {
     int name_bytes = read(0 , name , BUFFER_SIZE);
     name[name_bytes - 1] = '\0';
 
-    char welcome[BUFFER_SIZE];
+    static char welcome[BUFFER_SIZE];
     strcpy(welcome , "welcome ");
     strcat(welcome , name );
     strcat(welcome , " as resturant\n");
     welcome[name_bytes+21] = '\0';
-    // char* ne
-    // write(1 , welcome , strlen(welcome));
-    // intername 
+    return welcome;
+}
+
+
+int main(int argc, char const *argv[]) {
+    int udp_port = atoi(argv[1]);
+    int udp_sock, broadcast = 1, opt = 1;
+
+
+    char* welcome;
+    welcome = get_usename();
+
 
     //sever 
     int server_fd,max_sd;
@@ -85,11 +86,6 @@ int main(int argc, char const *argv[]) {
     
     write(1, "Server is running\n", 18);
 
-
-
-
-    ///////////
-
     
     char buffer[1024] = {0};
     char new_buffer[1024] = {0};
@@ -103,7 +99,7 @@ int main(int argc, char const *argv[]) {
     setsockopt(udp_sock, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
 
     bc_address.sin_family = AF_INET; 
-    bc_address.sin_port = htons(port); 
+    bc_address.sin_port = htons(udp_port); 
     bc_address.sin_addr.s_addr = inet_addr("255.255.255.255");
 
     bind(udp_sock, (struct sockaddr *)&bc_address, sizeof(bc_address));
@@ -117,13 +113,6 @@ int main(int argc, char const *argv[]) {
 
         working_set = master_set;
         select(max_sd + 1, &working_set, NULL, NULL, NULL);
-
-        // if(kbhit()){
-        //     char input_k[BUFFER_SIZE];
-        //     int input_bytes_readed = read(0,input_k,BUFFER_SIZE);
-        //     input_k[input_bytes_readed-1] = '/0';
-        //     write(1,input_k,BUFFER_SIZE)
-        // }
        
         for (int i = 0; i <= max_sd; i++) {
             if (FD_ISSET(i, &working_set)) {
@@ -140,6 +129,18 @@ int main(int argc, char const *argv[]) {
                 else if(i == udp_sock){
                     memset(buffer, 0, 1024);
                     int bytes_readed = recv(udp_sock, buffer, 1024,0);
+                    buffer[bytes_readed] = '\0';
+                    if(strcmp(buffer , "srs\n") == 0){
+                        buffer[bytes_readed-1] = '\0';
+                        char fd_str[40];
+                        snprintf(fd_str , sizeof(fd_str) , "%d" , server_fd);
+                        char send_fd[BUFFER_SIZE] = "s ";
+                        strcat(send_fd , fd_str);
+                        strcat(send_fd , "\n");
+                        
+                        sendto(udp_sock, send_fd, sizeof(send_fd), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                    
+                    }
                     write(1 , buffer , bytes_readed);
                 }
 
@@ -182,41 +183,8 @@ int main(int argc, char const *argv[]) {
                 }
             }
         }
-
-
-
-
-
-
-        
-        // int sended_bytes = sendto(sock, name, strlen(name), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
-        // memset(buffer , 0 ,1024);
-        // int bytes_readed = recv(sock , buffer , 1024 , 0);
-        // write(1,  buffer , bytes_readed);
-
-        // char start_working[100];
-        // int start_working_size = read(0 , start_working , 100);
-        // start_working[start_working_size - 1] = '\0';
-
-        // if(strcmp(start_working , "start working") == 0){
-        //     int sended_bytes = sendto(sock, name, strlen(name), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
-            
-        //     while (1) {
-        //         memset(buffer, 0, 1024);
-        //         int bytes_readed = recv(sock , buffer , 1024 , 0);
-        //         if(strcmp(buffer , welcome) != 0){
-        //             write(1,  buffer , bytes_readed);
-        //         }
-                
-        //     }
-        // }else if(strcmp(start_working , "break") == 0){
-        //     break;
-        // }else{
-        //     char* bad_request = "bad_request\n";
-        //     write(1 , bad_request , strlen(bad_request));
-        // }
         }
-        close(port);
+        close(udp_port);
         close(sever_port_val);
 
     
