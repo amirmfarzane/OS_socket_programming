@@ -10,6 +10,8 @@
 #include <sys/ioctl.h>
 #include <stdio.h>
 
+#define sever_port_val 7094
+
 int connectServer(int port)
 {
     int fd;
@@ -77,7 +79,7 @@ int main(int argc, char const *argv[]) {
     bc_address.sin_addr.s_addr = inet_addr("255.255.255.255");
 
     int connected_server_fd;
-    connected_server_fd = connectServer(7092);
+    connected_server_fd = connectServer(sever_port_val);
 
     FD_SET(udp_sock, &master_set);
     FD_SET(0, &master_set);
@@ -113,7 +115,13 @@ int main(int argc, char const *argv[]) {
                     int bytes_input_r = read(0,input_r,BUFFER_SIZE);
 
                     if(input_r[0] == 's'){
-                        sendto(connected_server_fd, input_r, bytes_input_r, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                        char fd_str[40];
+                        snprintf(fd_str , sizeof(fd_str) , "%d" , connected_server_fd);
+                        char send_fd[BUFFER_SIZE] = "";
+                        strcat(send_fd , fd_str);
+                        strcat(send_fd , "\n");
+                        
+                        sendto(connected_server_fd, send_fd, sizeof(send_fd), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
                     }
                     
                     else{
@@ -147,6 +155,6 @@ int main(int argc, char const *argv[]) {
         }
     }
     close(port);
-    close(7092);
+    close(sever_port_val);
     return 0;
 }
