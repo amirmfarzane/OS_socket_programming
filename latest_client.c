@@ -77,7 +77,7 @@ int main(int argc, char const *argv[]) {
     bc_address.sin_addr.s_addr = inet_addr("255.255.255.255");
 
     int connected_server_fd;
-    connected_server_fd = connectServer(7091);
+    connected_server_fd = connectServer(7092);
 
     FD_SET(udp_sock, &master_set);
     FD_SET(0, &master_set);
@@ -147,6 +147,6 @@ int main(int argc, char const *argv[]) {
         }
     }
     close(port);
-    close(7091);
+    close(7092);
     return 0;
 }
