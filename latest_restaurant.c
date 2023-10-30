@@ -48,7 +48,7 @@ int acceptClient(int server_fd) {
 // }
 
 int main(int argc, char const *argv[]) {
-    // int port = atoi(argv[1]);
+    int port = atoi(argv[1]);
     int udp_sock, broadcast = 1, opt = 1;
 
     //inter name:
@@ -70,7 +70,7 @@ int main(int argc, char const *argv[]) {
 
     //sever 
     int server_fd,max_sd;
-    server_fd = setupServer(7090);
+    server_fd = setupServer(7091);
 
 
     //set ::::
@@ -102,7 +102,7 @@ int main(int argc, char const *argv[]) {
     setsockopt(udp_sock, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
 
     bc_address.sin_family = AF_INET; 
-    bc_address.sin_port = htons(8090); 
+    bc_address.sin_port = htons(port); 
     bc_address.sin_addr.s_addr = inet_addr("255.255.255.255");
 
     bind(udp_sock, (struct sockaddr *)&bc_address, sizeof(bc_address));
@@ -145,7 +145,15 @@ int main(int argc, char const *argv[]) {
                 else if(i == 0){
                     char input_r[BUFFER_SIZE] ;
                     int bytes_input_r = read(0,input_r,BUFFER_SIZE);
-                    sendto(udp_sock, input_r, bytes_input_r, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+
+                    if(input_r[0] == 'c'){
+                        // sendto(server_fd, input_r, bytes_input_r, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                        ;
+                    }
+                    
+                    else{
+                        sendto(udp_sock, input_r, bytes_input_r, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                    }
                     // write(1 , input_r , bytes_input_r);
                     
                 }
@@ -156,18 +164,19 @@ int main(int argc, char const *argv[]) {
                 
                 else { 
                     // client sending msg
-                    // int bytes_received;
-                    // bytes_received = recv(i , buffer, 1024, 0);
+                    memset(buffer, 0, 1024);
+                    int bytes_received;
+                    bytes_received = recv(i , buffer, 1024, 0);
                     
-                    // if (bytes_received == 0) { // EOF
-                    //     printf("client fd = %d closed\n", i);
-                    //     close(i);
-                    //     FD_CLR(i, &master_set);
-                    //     continue;
-                    // }
+                    if (bytes_received == 0) { // EOF
+                        printf("client fd = %d closed\n", i);
+                        close(i);
+                        FD_CLR(i, &master_set);
+                        continue;
+                    }
 
-                    // printf("client %d: %s\n", i, buffer);
-                    // memset(buffer, 0, 1024);
+                    write(1 , buffer , bytes_received);
+                    
                     ;
                 }
             }
@@ -206,8 +215,8 @@ int main(int argc, char const *argv[]) {
         //     write(1 , bad_request , strlen(bad_request));
         // }
         }
-        close(8090);
-        close(7090);
+        close(port);
+        close(7091);
 
     
 
