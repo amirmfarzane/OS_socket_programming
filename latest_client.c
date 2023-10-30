@@ -10,7 +10,8 @@
 #include <sys/ioctl.h>
 #include <stdio.h>
 
-#define sever_port_val 7094
+#define sever_port_val 7093
+#define BUFFER_SIZE 1024
 
 int connectServer(int port)
 {
@@ -31,12 +32,7 @@ int connectServer(int port)
     return fd;
 }
 
-#define BUFFER_SIZE 1024
-int main(int argc, char const *argv[]) {
-    int port = atoi(argv[1]);
-    int udp_sock, broadcast = 1, opt = 1;
-
-    //inter name:
+char* get_usename(){
     char* enter_name = "Please enter your username:";
     write(1 , enter_name , strlen(enter_name));
     char name[BUFFER_SIZE] =  {0};
@@ -44,14 +40,22 @@ int main(int argc, char const *argv[]) {
     int name_bytes = read(0 , name , BUFFER_SIZE);
     name[name_bytes - 1] = '\0';
 
-    char welcome[BUFFER_SIZE];
+    static char welcome[BUFFER_SIZE];
     strcpy(welcome , "welcome ");
     strcat(welcome , name );
-    strcat(welcome , " as customer\n");
-    welcome[name_bytes+20] = '\0';
-    // char* ne
-    // write(1 , welcome , strlen(welcome));
-    // intername 
+    strcat(welcome , " as resturant\n");
+    welcome[name_bytes+21] = '\0';
+    return welcome;
+}
+
+
+int main(int argc, char const *argv[]) {
+    int port = atoi(argv[1]);
+    int udp_sock, broadcast = 1, opt = 1;
+
+    //inter name:
+    char* welcome;
+    welcome = get_usename();
 
     /// set
 
@@ -113,15 +117,20 @@ int main(int argc, char const *argv[]) {
                 else if(i == 0){
                     char input_r[BUFFER_SIZE] ;
                     int bytes_input_r = read(0,input_r,BUFFER_SIZE);
-
-                    if(input_r[0] == 's'){
-                        char fd_str[40];
-                        snprintf(fd_str , sizeof(fd_str) , "%d" , connected_server_fd);
-                        char send_fd[BUFFER_SIZE] = "";
-                        strcat(send_fd , fd_str);
-                        strcat(send_fd , "\n");
+                    input_r[bytes_input_r - 1] = '\0';
+                    // if(input_r == "show restaurants"){
+                    //     char fd_str[40];
+                    //     snprintf(fd_str , sizeof(fd_str) , "%d" , connected_server_fd);
+                    //     char send_fd[BUFFER_SIZE] = "s ";
+                    //     strcat(send_fd , fd_str);
+                    //     strcat(send_fd , "\n");
                         
-                        sendto(connected_server_fd, send_fd, sizeof(send_fd), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                    //     sendto(connected_server_fd, send_fd, sizeof(send_fd), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                    // }
+
+                    if(strcmp(input_r , "show restaurants") == 0){
+                        char* show_reses = "srs";
+                        sendto(udp_sock, show_reses, sizeof(show_reses), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
                     }
                     
                     else{
