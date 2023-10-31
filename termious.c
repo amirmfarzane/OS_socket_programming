@@ -2,7 +2,17 @@
 #include <termios.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <string.h>
+#include <signal.h>
+
+void unlockInput(int signum) {
+    // Restore the original terminal settings
+    struct termios orig_termios;
+    tcgetattr(STDIN_FILENO, &orig_termios);
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
+
+    printf("Input unlocked!\n");
+    exit(0);
+}
 
 int main() {
     struct termios orig_termios, new_termios;
@@ -25,23 +35,22 @@ int main() {
         exit(1);
     }
 
-    // Read input character by character until a specific key is pressed (e.g., 'q' to quit)
+    // Set an alarm for 5 seconds
+    alarm(5);
+
+    // Set up a signal handler for SIGALRM
+    signal(SIGALRM, unlockInput);
+
+    printf("Input is locked for 5 seconds...\n");
+
+    // Read input character by character
     char c;
     while (1) {
         if (read(STDIN_FILENO, &c, 1) == -1) {
             perror("read");
             break;
         }
-
-        if (c == 'q') {
-            break; // Quit the loop when 'q' is pressed
-        }
-    }
-
-    // Restore the original terminal settings
-    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1) {
-        perror("tcsetattr");
-        exit(1);
+        // Do something with the input, if needed
     }
 
     return 0;
