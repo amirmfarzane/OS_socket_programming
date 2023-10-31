@@ -13,6 +13,25 @@
 #define sever_port_val 7093
 #define BUFFER_SIZE 1024
 
+int setupServer(int port) {
+    struct sockaddr_in address;
+    int server_fd;
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+
+    int opt = 1;
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
+    
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_port = htons(port);
+
+    bind(server_fd, (struct sockaddr *)&address, sizeof(address));
+    
+    listen(server_fd, 4);
+
+    return server_fd;
+}
+
 int connectServer(int port)
 {
     int fd;
@@ -32,10 +51,15 @@ int connectServer(int port)
     return fd;
 }
 
-char* get_usename(){
+struct welome_name{
+    char* welcome;
+    char* name;
+};
+
+struct welome_name get_usename(){
     char* enter_name = "Please enter your username:";
     write(1 , enter_name , strlen(enter_name));
-    char name[BUFFER_SIZE] =  {0};
+    static char name[BUFFER_SIZE] =  {0};
     
     int name_bytes = read(0 , name , BUFFER_SIZE);
     name[name_bytes - 1] = '\0';
@@ -43,10 +67,25 @@ char* get_usename(){
     static char welcome[BUFFER_SIZE];
     strcpy(welcome , "welcome ");
     strcat(welcome , name );
-    strcat(welcome , " as resturant\n");
+    strcat(welcome , " as client\n");
     welcome[name_bytes+21] = '\0';
-    return welcome;
+
+    struct welome_name result;
+    result.welcome  =welcome;
+    result.name = name;
+    return result;
 }
+
+char* client_port_show(int server_fd){
+    char fd_str[40];
+    snprintf(fd_str , sizeof(fd_str) , "%d" , server_fd);
+    static char send_fd[BUFFER_SIZE] = "";
+    strcat(send_fd , "my port is : ");
+    strcat(send_fd , " ");
+    strcat(send_fd , fd_str);
+    strcat(send_fd , "\n");
+    return send_fd;
+ }
 
 
 int main(int argc, char const *argv[]) {
@@ -54,13 +93,20 @@ int main(int argc, char const *argv[]) {
     int udp_sock, broadcast = 1, opt = 1;
 
     //inter name:
+    struct welome_name welocme_name_struct;
+    welocme_name_struct = get_usename();
+
     char* welcome;
-    welcome = get_usename();
+    welcome = welocme_name_struct.welcome;
+    char* name ;
+    name = welocme_name_struct.name;
 
     /// set
 
     fd_set master_set,working_set;
 
+    int server_fd,max_sd;
+    server_fd = setupServer(sever_port_val);
     
 
     FD_ZERO(&master_set);
@@ -82,13 +128,14 @@ int main(int argc, char const *argv[]) {
     bc_address.sin_port = htons(port); 
     bc_address.sin_addr.s_addr = inet_addr("255.255.255.255");
 
-    int connected_server_fd;
-    connected_server_fd = connectServer(sever_port_val);
+    // int connected_server_fd;
+    // connected_server_fd = connectServer(sever_port_val);
 
+    FD_SET(server_fd, &master_set);
     FD_SET(udp_sock, &master_set);
     FD_SET(0, &master_set);
     // FD_SET(1, &master_set);
-    int max_sd;
+    
     max_sd = udp_sock;
 
     bind(udp_sock, (struct sockaddr *)&bc_address, sizeof(bc_address));
@@ -113,11 +160,14 @@ int main(int argc, char const *argv[]) {
                     int bytes_readed = recv(udp_sock, buffer, 1024,0);
                     write(1 , buffer , bytes_readed);
                 }
+                else if(i == server_fd){
+
+                }
 
                 else if(i == 0){
                     char input_r[BUFFER_SIZE] ;
                     int bytes_input_r = read(0,input_r,BUFFER_SIZE);
-                    input_r[bytes_input_r - 1] = '\0';
+                    input_r[bytes_input_r ] = '\0';
                     // if(input_r == "show restaurants"){
                     //     char fd_str[40];
                     //     snprintf(fd_str , sizeof(fd_str) , "%d" , connected_server_fd);
@@ -128,9 +178,36 @@ int main(int argc, char const *argv[]) {
                     //     sendto(connected_server_fd, send_fd, sizeof(send_fd), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
                     // }
 
-                    if(strcmp(input_r , "show restaurants") == 0){
-                        char* show_reses = "srs";
-                        sendto(udp_sock, show_reses, sizeof(show_reses), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                    if(strcmp(input_r , "show restaurants\n") == 0){
+                        char* srver_port_show;
+                        
+                        char* show_reses = "username and port\n";
+
+                        // char fd_str[40];
+                        // snprintf(fd_str , sizeof(fd_str) , "%d" , server_fd);
+                        // strcat(fd_str , "\n");
+                        // sendto(udp_sock, show_reses, strlen(show_reses), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                        sendto(udp_sock, show_reses, strlen(show_reses), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                    }
+
+                    else if(strcmp(input_r , "order food\n") == 0){
+                        char food_name[BUFFER_SIZE];
+                        static char port_number[BUFFER_SIZE];
+
+                        char* get_food_name = "write food name : " ;
+                        write(1 , get_food_name , strlen(get_food_name));
+                        int read_name = read(0 , food_name , BUFFER_SIZE);
+                        food_name[read_name - 1] = '\0';
+
+                        char* get_port_number = "write restaurant port : " ;
+                        write(1 , get_port_number , strlen(get_port_number));
+                        int read_port = read(0 , port_number , BUFFER_SIZE);
+                        port_number[read_port - 1] = '\0';
+
+                        int connected_server_port , connected_server_fd;
+                        connected_server_port = atoi(port_number);
+                        connected_server_fd = connectServer(connected_server_port);
+                        FD_SET(connected_server_fd, &master_set);
                     }
                     
                     else{
