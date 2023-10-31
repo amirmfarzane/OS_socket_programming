@@ -53,5 +53,10 @@ int main() {
         // Do something with the input, if needed
     }
 
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1) {
+        perror("tcsetattr");
+        exit(1);
+    }
+
     return 0;
 }
