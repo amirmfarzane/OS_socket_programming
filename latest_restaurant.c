@@ -10,29 +10,62 @@
 #include <sys/ioctl.h>
 #include <stdio.h>
 #include <arpa/inet.h>
+#include <time.h>
+
+
 
 #define BUFFER_SIZE 1024
-#define sever_port_val 1024 + rand()%(49151-1024+1)
+// #define sever_port_val 1024 + rand()%(49151-1024+1)
 
+struct server_fd_port{
+    int fd;
+    int port;
+};
 
-
-int setupServer(int port) {
+struct server_fd_port setupServer(int port_udp) {
+    srand(time(NULL));
     struct sockaddr_in address;
+    struct server_fd_port my_server_info;
     int server_fd;
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
     int opt = 1;
+    int i=  1;
+    int port ;
+    port = 1024 + rand()%1000;
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
     
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(port);
+    address.sin_port = htons(port_udp+i);
 
     bind(server_fd, (struct sockaddr *)&address, sizeof(address));
     
-    listen(server_fd, 4);
+    my_server_info.fd = server_fd;
+    my_server_info.port = port;
+    
+    listen(server_fd, server_fd);
 
-    return server_fd;
+    return my_server_info;
+}
+
+int connectServer(int port)
+{
+    int fd;
+    struct sockaddr_in server_address;
+
+    fd = socket(AF_INET, SOCK_STREAM, 0);
+
+    server_address.sin_family = AF_INET;
+    server_address.sin_port = htons(port);
+    server_address.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+    if (connect(fd, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
+    { // checking for errors
+        printf("Error in connecting to server\n");
+    }
+
+    return fd;
 }
 
 int acceptClient(int server_fd) {
@@ -44,10 +77,15 @@ int acceptClient(int server_fd) {
     return client_fd;
 }
 
-char* get_usename(){
+struct welome_name{
+    char* welcome;
+    char* name;
+};
+
+struct welome_name get_usename(){
     char* enter_name = "Please enter your username:";
     write(1 , enter_name , strlen(enter_name));
-    char name[BUFFER_SIZE] =  {0};
+    static char name[BUFFER_SIZE] =  {0};
     
     int name_bytes = read(0 , name , BUFFER_SIZE);
     name[name_bytes - 1] = '\0';
@@ -57,22 +95,36 @@ char* get_usename(){
     strcat(welcome , name );
     strcat(welcome , " as resturant\n");
     welcome[name_bytes+21] = '\0';
-    return welcome;
+
+    struct welome_name result;
+    result.welcome  =welcome;
+    result.name = name;
+    return result;
 }
+
+
 
 
 int main(int argc, char const *argv[]) {
     int udp_port = atoi(argv[1]);
     int udp_sock, broadcast = 1, opt = 1;
+ 
 
+    struct welome_name welocme_name_struct;
+    welocme_name_struct = get_usename();
 
     char* welcome;
-    welcome = get_usename();
+    welcome = welocme_name_struct.welcome;
+    char* name ;
+    name = welocme_name_struct.name;
 
 
     //sever 
-    int server_fd,max_sd;
-    server_fd = setupServer(sever_port_val);
+    int port_tcp,server_fd,max_sd;
+    struct server_fd_port fd_port;
+    fd_port = setupServer(udp_port);
+    server_fd = fd_port.fd;
+    port_tcp = fd_port.port;
 
 
     //set ::::
@@ -130,11 +182,15 @@ int main(int argc, char const *argv[]) {
                     memset(buffer, 0, 1024);
                     int bytes_readed = recv(udp_sock, buffer, 1024,0);
                     buffer[bytes_readed] = '\0';
-                    if(strcmp(buffer , "srs\n") == 0){
-                        buffer[bytes_readed-1] = '\0';
+                    if(strcmp(buffer , "username and port\n") == 0){
+                        buffer[bytes_readed] = '\0';
+
+
                         char fd_str[40];
-                        snprintf(fd_str , sizeof(fd_str) , "%d" , server_fd);
-                        char send_fd[BUFFER_SIZE] = "s ";
+                        snprintf(fd_str , sizeof(fd_str) , "%d" , port_tcp);
+                        char send_fd[BUFFER_SIZE] = "";
+                        strcat(send_fd , name);
+                        strcat(send_fd , " ");
                         strcat(send_fd , fd_str);
                         strcat(send_fd , "\n");
                         
@@ -147,7 +203,7 @@ int main(int argc, char const *argv[]) {
                 else if(i == 0){
                     char input_r[BUFFER_SIZE] ;
                     int bytes_input_r = read(0,input_r,BUFFER_SIZE);
-
+                    input_r[bytes_input_r] = '\0';
                     if(input_r[0] == 'c'){
                         // sendto(server_fd, input_r, bytes_input_r, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
                         ;
@@ -185,7 +241,7 @@ int main(int argc, char const *argv[]) {
         }
         }
         close(udp_port);
-        close(sever_port_val);
+        close(port_tcp);
 
     
 
