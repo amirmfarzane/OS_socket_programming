@@ -22,7 +22,7 @@ struct server_fd_port{
     int port;
 };
 
-struct server_fd_port setupServer(int port_udp) {
+struct server_fd_port setupServer() {
     srand(time(NULL));
     struct sockaddr_in address;
     struct server_fd_port my_server_info;
@@ -30,22 +30,22 @@ struct server_fd_port setupServer(int port_udp) {
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
     int opt = 1;
-    int i=  1;
     int port ;
     port = 1024 + rand()%1000;
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
     
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(port_udp+i);
+    address.sin_port = htons(port);
 
     bind(server_fd, (struct sockaddr *)&address, sizeof(address));
     
     my_server_info.fd = server_fd;
     my_server_info.port = port;
     
-    listen(server_fd, server_fd);
+    listen(server_fd, 4);
 
+    write(1, "Server is running\n", 18);
     return my_server_info;
 }
 
@@ -58,7 +58,7 @@ int connectServer(int port)
 
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(port);
-    server_address.sin_addr.s_addr = inet_addr("127.0.0.1");
+    server_address.sin_addr.s_addr = INADDR_ANY;
 
     if (connect(fd, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
     { // checking for errors
@@ -105,10 +105,12 @@ struct welome_name get_usename(){
 
 
 
+
+
 int main(int argc, char const *argv[]) {
     int udp_port = atoi(argv[1]);
     int udp_sock, broadcast = 1, opt = 1;
- 
+    
 
     struct welome_name welocme_name_struct;
     welocme_name_struct = get_usename();
@@ -122,7 +124,7 @@ int main(int argc, char const *argv[]) {
     //sever 
     int port_tcp,server_fd,max_sd;
     struct server_fd_port fd_port;
-    fd_port = setupServer(udp_port);
+    fd_port = setupServer();
     server_fd = fd_port.fd;
     port_tcp = fd_port.port;
 
@@ -136,15 +138,11 @@ int main(int argc, char const *argv[]) {
     FD_ZERO(&master_set);
     FD_SET(server_fd, &master_set);
     
-    write(1, "Server is running\n", 18);
 
     
     char buffer[1024] = {0};
     char new_buffer[1024] = {0};
     struct sockaddr_in bc_address;
-
-
-
 
     udp_sock = socket(AF_INET, SOCK_DGRAM, 0);
     setsockopt(udp_sock, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof(broadcast));
@@ -162,7 +160,7 @@ int main(int argc, char const *argv[]) {
     sendto(udp_sock, welcome, strlen(welcome), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
   
     while(1){
-
+        
         working_set = master_set;
         select(max_sd + 1, &working_set, NULL, NULL, NULL);
        
@@ -173,16 +171,18 @@ int main(int argc, char const *argv[]) {
                     FD_SET(new_socket, &master_set);
                     if (new_socket > max_sd)
                         max_sd = new_socket;
-                    printf("New client connected. fd = %d\n", new_socket);
 
-                    
-                    ;
+                    printf("New client connected. fd = %d\n", new_socket);
+                    memset(buffer, 0, 1024);
+                    int bytes_readed = recv(0, buffer, 1024,0);
+                    buffer[bytes_readed] = '\0';
+                    sendto(new_socket, buffer, sizeof(bytes_readed), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
                 }
                 else if(i == udp_sock){
                     memset(buffer, 0, 1024);
                     int bytes_readed = recv(udp_sock, buffer, 1024,0);
                     buffer[bytes_readed] = '\0';
-                    if(strcmp(buffer , "username and port\n") == 0){
+                    if(strcmp(buffer , "username and port : \n") == 0){
                         buffer[bytes_readed] = '\0';
 
 
@@ -197,6 +197,9 @@ int main(int argc, char const *argv[]) {
                         sendto(udp_sock, send_fd, sizeof(send_fd), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
                     
                     }
+                    else if(strcmp(buffer , "request list\n") == 0){
+                            ;
+                    }
                     write(1 , buffer , bytes_readed);
                 }
 
@@ -204,13 +207,14 @@ int main(int argc, char const *argv[]) {
                     char input_r[BUFFER_SIZE] ;
                     int bytes_input_r = read(0,input_r,BUFFER_SIZE);
                     input_r[bytes_input_r] = '\0';
-                    if(input_r[0] == 'c'){
-                        // sendto(server_fd, input_r, bytes_input_r, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                    if(strcmp(input_r , "request list\n") == 0){
+                        sendto(udp_sock, input_r, bytes_input_r, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
                         ;
                     }
                     
                     else{
-                        sendto(udp_sock, input_r, bytes_input_r, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                        // sendto(udp_sock, input_r, bytes_input_r, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                        ;
                     }
                     // write(1 , input_r , bytes_input_r);
                     
