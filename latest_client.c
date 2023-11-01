@@ -9,9 +9,12 @@
 #include <signal.h>
 #include <sys/ioctl.h>
 #include <stdio.h>
+#include <termio.h>
 
 #define sever_port_val 7093
 #define BUFFER_SIZE 1024
+
+int input_locked = 0;
 
 int setupServer(int port) {
     struct sockaddr_in address;
@@ -41,7 +44,7 @@ int connectServer(int port)
 
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(port);
-    server_address.sin_addr.s_addr = inet_addr("127.0.0.1");
+    server_address.sin_addr.s_addr = INADDR_ANY;
 
     if (connect(fd, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
     { // checking for errors
@@ -87,11 +90,16 @@ char* client_port_show(int server_fd){
     return send_fd;
  }
 
+void alarm_handler(int sig){
+    if(input_locked)
+        input_locked =0;
+}
+
 
 int main(int argc, char const *argv[]) {
     int port = atoi(argv[1]);
     int udp_sock, broadcast = 1, opt = 1;
-
+    int client_port = 2048 + rand()%1000;
     //inter name:
     struct welome_name welocme_name_struct;
     welocme_name_struct = get_usename();
@@ -110,12 +118,6 @@ int main(int argc, char const *argv[]) {
     
 
     FD_ZERO(&master_set);
-    // FD_SET(server_fd, &master_set);
-
-
-
-
-
 
     char buffer[1024] = {0};
     struct sockaddr_in bc_address;
@@ -129,7 +131,7 @@ int main(int argc, char const *argv[]) {
     bc_address.sin_addr.s_addr = inet_addr("255.255.255.255");
 
     // int connected_server_fd;
-    // connected_server_fd = connectServer(sever_port_val);
+    // connected_server_fd = connectServer(9999);
 
     FD_SET(server_fd, &master_set);
     FD_SET(udp_sock, &master_set);
@@ -140,7 +142,9 @@ int main(int argc, char const *argv[]) {
 
     bind(udp_sock, (struct sockaddr *)&bc_address, sizeof(bc_address));
     sendto(udp_sock, welcome, strlen(welcome), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
-    
+    char food_name[BUFFER_SIZE];
+    static char port_number[BUFFER_SIZE];
+    int connected_server_port , connected_server_fd;
 
     while (1) {
         working_set = master_set;
@@ -158,7 +162,23 @@ int main(int argc, char const *argv[]) {
                 if(i == udp_sock){
                     memset(buffer, 0, 1024);
                     int bytes_readed = recv(udp_sock, buffer, 1024,0);
-                    write(1 , buffer , bytes_readed);
+                    // write(1, "\033[0;35m" , 8);
+                    if(strcmp(buffer , "request list\n") == 0){
+                        char fd_str[40];
+                        snprintf(fd_str , sizeof(fd_str) , "%d" , client_port);
+                        char send_fd[BUFFER_SIZE] = "";
+                        strcat(send_fd , name);
+                        strcat(send_fd , " ");
+                        strcat(send_fd , fd_str);
+                        strcat(send_fd , " ");
+                        strcat(send_fd , food_name);
+                        strcat(send_fd , "\n");
+
+                        
+                        sendto(connected_server_fd, send_fd, strlen(send_fd), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                    }else{
+                        write(1  , buffer , bytes_readed);
+                    }
                 }
                 else if(i == server_fd){
 
@@ -166,8 +186,10 @@ int main(int argc, char const *argv[]) {
 
                 else if(i == 0){
                     char input_r[BUFFER_SIZE] ;
+                    char welcome_r[BUFFER_SIZE];
                     int bytes_input_r = read(0,input_r,BUFFER_SIZE);
                     input_r[bytes_input_r ] = '\0';
+                    welcome_r[7] = '\0';
                     // if(input_r == "show restaurants"){
                     //     char fd_str[40];
                     //     snprintf(fd_str , sizeof(fd_str) , "%d" , connected_server_fd);
@@ -179,21 +201,16 @@ int main(int argc, char const *argv[]) {
                     // }
 
                     if(strcmp(input_r , "show restaurants\n") == 0){
-                        char* srver_port_show;
+                        char username[BUFFER_SIZE] = "username and port : \n";
                         
-                        char* show_reses = "username and port\n";
-
-                        // char fd_str[40];
-                        // snprintf(fd_str , sizeof(fd_str) , "%d" , server_fd);
-                        // strcat(fd_str , "\n");
-                        // sendto(udp_sock, show_reses, strlen(show_reses), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
-                        sendto(udp_sock, show_reses, strlen(show_reses), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                        sendto(udp_sock, username, BUFFER_SIZE, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                        // sendto()
                     }
 
                     else if(strcmp(input_r , "order food\n") == 0){
-                        char food_name[BUFFER_SIZE];
-                        static char port_number[BUFFER_SIZE];
-
+                        memset(food_name , 0 , BUFFER_SIZE);
+                        memset(port_number , 0 , BUFFER_SIZE);
+                        strcat(food_name ,"\033[0;34m");
                         char* get_food_name = "write food name : " ;
                         write(1 , get_food_name , strlen(get_food_name));
                         int read_name = read(0 , food_name , BUFFER_SIZE);
@@ -203,15 +220,20 @@ int main(int argc, char const *argv[]) {
                         write(1 , get_port_number , strlen(get_port_number));
                         int read_port = read(0 , port_number , BUFFER_SIZE);
                         port_number[read_port - 1] = '\0';
-
-                        int connected_server_port , connected_server_fd;
+                        // write(1 , port_number ,read_port - 1 );
+                        
                         connected_server_port = atoi(port_number);
                         connected_server_fd = connectServer(connected_server_port);
+                        char* new_order = "\033[0;32mnew \033[0;37morder\n";
+                        sendto(connected_server_fd, new_order, strlen(new_order), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
                         FD_SET(connected_server_fd, &master_set);
+                    }
+                    else if(strcmp(welcome_r , "welcome") == 0){
+                        sendto(udp_sock, input_r, bytes_input_r, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
                     }
                     
                     else{
-                        sendto(udp_sock, input_r, bytes_input_r, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                        ;
                     }
                     // write(1 , input_r , bytes_input_r);
                     
