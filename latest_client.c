@@ -118,6 +118,14 @@ int acceptClient(int server_fd) {
     return client_fd;
 }
 
+void alarm_handler(int sig){
+    char *buffer;
+    buffer = "\033[0;37mtime finished\n";
+
+    write(1 , buffer , strlen(buffer));
+    ;
+}
+
 
 void read_foods_file(){
     int fd = open("recipes.json", O_RDONLY); 
@@ -155,13 +163,17 @@ void read_foods_file(){
 	cJSON_Delete(root); 
 	close(fd);
 }
+typedef struct resturant
+{
+    char* port;
+    char* food_name;
+}order;
 
 
 int main(int argc, char const *argv[]) {
     int new_socket;
     int port = atoi(argv[1]);
     int udp_sock, broadcast = 1, opt = 1;
-    int client_port = 2048 + rand()%1000;
     //inter name:
     struct welome_name welocme_name_struct;
     welocme_name_struct = get_usename();
@@ -295,24 +307,37 @@ int main(int argc, char const *argv[]) {
                         write(1 , get_food_name , strlen(get_food_name));
                         int read_name = read(0 , food_name , BUFFER_SIZE);
                         food_name[read_name - 1] = '\0';
+                        
+
 
                         char* get_port_number = "write restaurant port : " ;
                         write(1 , get_port_number , strlen(get_port_number));
                         int read_port = read(0 , port_number , BUFFER_SIZE);
                         port_number[read_port - 1] = '\0';
-                        // write(1 , port_number ,read_port - 1 );
+                        
                         
                         connected_server_port = atoi(port_number);
                         connected_server_fd = connectServer(connected_server_port);
-                        char* new_order = "\033[0;32mnew \033[0;37morder\n";
+                        
+                        // char* new_order = "\033[0;32mnew \033[0;37morder\n";
                         char* waiting = "waiting for respones\n";
                         write(1 , waiting , strlen(waiting));
-                        sendto(connected_server_fd, new_order, strlen(new_order), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
 
-                        signal(SIGALRM, alarm_handler);
+                        char main_port[4];
+                        sprintf(main_port , "%d" , port_tcp);
+                        char info[BUFFER_SIZE]="*";
+                        strcat(info,main_port);
+                        strcat(info," ");
+                        strcat(info,food_name);
+                        // sendto(connected_server_fd, new_order, strlen(new_order), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                        sendto(connected_server_fd, info, strlen(info), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                        
+
+                        // signal(SIGALRM, alarm_handler);
                         unsigned int second = 25;
-                        alarm(second);
+                        // alarm(second);
                         FD_SET(connected_server_fd, &master_set);
+                        // alarm(0);
                     }
                     else if(strcmp(welcome_r , "welcome") == 0){
                         sendto(udp_sock, input_r, bytes_input_r, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
@@ -328,24 +353,7 @@ int main(int argc, char const *argv[]) {
                         char* unvalid = "unvalid input\n";
                         write(1 , unvalid , strlen(unvalid));;
                     }
-                    // write(1 , input_r , bytes_input_r);
                     
-                }
-                else if(i == 1){
-                    // memset(buffer, 0, 1024);
-                    // int bytes_received;
-                    // bytes_received = recv(connected_server_fd , buffer, 1024, 0);
-                    // buffer[bytes_received-1] = '\0';
-                    // if (bytes_received == 0) { // EOF
-                    //     printf("client fd = %d closed\n", i);
-                    //     close(i);
-                    //     FD_CLR(i, &master_set);
-                    //     continue;
-                    // }
-                    
-
-                    // write(1 , buffer , bytes_received);
-                    // ;
                 }
                 
                 else { 
@@ -355,11 +363,15 @@ int main(int argc, char const *argv[]) {
                     buffer[bytes_received] = '\0';
                     if(strcmp(buffer , "yes\n") == 0){
                         close(i);
-                        char* req_ac = "req accepted\n";
+                        char* req_ac = "Req accepted!\n";
                         write(1 , req_ac , strlen(req_ac));
                     }else if(strcmp(buffer , "no\n") == 0){
                         close(i);
-                        char* req_ac = "req rejected\n";
+                        char* req_ac = "Req rejected!\n";
+                        write(1 , req_ac , strlen(req_ac));
+                    }else if(strcmp(buffer , "oops") == 0){
+                        close(i);
+                        char* req_ac = "Not enough ingredients!\n";
                         write(1 , req_ac , strlen(req_ac));
                     }else{
                         write(1 , buffer , bytes_received);
