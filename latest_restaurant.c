@@ -18,9 +18,19 @@
 
 #define sever_port_val 7093
 #define BUFFER_SIZE 1024
-#define recepies_num 15
+#define ingres_num 15
+#define orders_size 10
 
 int input_locked = 0;
+
+struct ingred{
+    char* name;
+    int number;
+};
+
+struct ingred ingreds[16];
+
+
 
 void read_recipes_file(){
     int fd = open("recipes.json", O_RDONLY); 
@@ -78,7 +88,70 @@ void read_recipes_file(){
 	cJSON_Delete(root); 
 	close(fd);
 }
-// #define sever_port_val 1024 + rand()%(49recepies_num1-1024+1)
+
+typedef struct resturant
+{
+    char port[4];
+    char* food_name;
+    int status;
+    char* person_name;
+}order;
+
+int handle_order_food(char* food_name){
+    int fd = open("recipes.json", O_RDONLY); 
+	if (fd == -1) { 
+        char* error = "Error: Unable to open the file.\n";
+		write(1,error,strlen(error)); 
+	} 
+	char buffer[10024]; 
+	int len = read(fd, buffer, 10024); 
+	cJSON *root = cJSON_Parse(buffer); 
+
+	cJSON *item;
+	cJSON *dish;
+
+    int res=0;
+    
+	cJSON_ArrayForEach(item,root){
+		const char* dish_name = item->string;
+        int index = 0;
+		if(strcmp(dish_name,food_name) == 0){
+            index = 0;
+            cJSON_ArrayForEach(dish,item){
+                int j=0;
+                while(j<ingres_num){
+                    if(strcmp(ingreds[j].name , dish->string) == 0){
+                        break;
+                    }
+                    j=j+1;
+                }
+
+                int val = dish->valueint;
+                if(ingreds[j].number < val)
+                    return -1;
+
+                
+            }
+            index = 0;
+            cJSON_ArrayForEach(dish,item){
+                int j=0;
+                while(j<ingres_num){
+                    if(strcmp(ingreds[j].name , dish->string) == 0){
+                        break;
+                    }
+                    j=j+1;
+                }
+
+                int val = dish->valueint;
+                ingreds[j].number = ingreds[j].number-val;
+                res = val+res;
+            }
+        }
+	}
+	cJSON_Delete(root); 
+	close(fd);
+    return res;
+}
 
 struct server_fd_port{
     int fd;
@@ -174,15 +247,8 @@ struct welome_name get_usename(){
     return result;
 }
 
-struct ingred{
-    char* name;
-    int number;
-};
-
-struct ingred ingreds[16];
-
 void impact_accept_ingred(int val,char* name){
-    for(int i=0 ; i<recepies_num ; i++){
+    for(int i=0 ; i<ingres_num ; i++){
         if(strcmp(ingreds[i].name , name)==0){
             ingreds[i].number = ingreds[i].number+val;
             printf("hi\n");
@@ -190,6 +256,18 @@ void impact_accept_ingred(int val,char* name){
     }
 }
 
+order find_order(order orders[] , char port[] ,int order_index){
+    write(1, "hiiii\n",5);
+    for(int i=0 ; i<order_index ; i++){
+        
+        if(strcmp(orders[i].port , port) == 0){
+            write(1, "####",5);
+            return orders[i];
+        }
+    }
+    order null;
+    return null;
+}
 
 
 char client_port_name[BUFFER_SIZE];
@@ -232,6 +310,8 @@ int main(int argc, char const *argv[]) {
     ingreds[14].name = "Lentils";
     ingreds[14].number = 0;
 
+
+
     struct welome_name welocme_name_struct;
     welocme_name_struct = get_usename();
 
@@ -253,12 +333,8 @@ int main(int argc, char const *argv[]) {
     
     fd_set master_set,working_set;
 
-    
-
     FD_ZERO(&master_set);
     FD_SET(server_fd, &master_set);
-    
-
     
     char buffer[1024] = {0};
     char new_buffer[1024] = {0};
@@ -283,7 +359,8 @@ int main(int argc, char const *argv[]) {
     char get_name_req[BUFFER_SIZE];
     char get_number_req[BUFFER_SIZE];
     
-
+    order orders[10];
+    int orders_index=0;
     while(1){
         
         working_set = master_set;
@@ -355,9 +432,23 @@ int main(int argc, char const *argv[]) {
                         char restaurant_ans[BUFFER_SIZE];
                         int read_ans = read(0 , restaurant_ans , BUFFER_SIZE);
                         restaurant_ans[read_ans] = '\0';
+                        int handling_answer;
+                        if(strcmp(restaurant_ans, "yes\n") == 0){
+                            order this_order;
+                            this_order = find_order(orders , client_port_name , orders_index);
+                            write(1,this_order.food_name,8);
+                            handling_answer = handle_order_food(this_order.food_name);
+                            char s[4];
+                            sprintf(s , "%d" ,handling_answer);
+                            write(1 , s ,4);
+                        }
 
-
-                        sendto(client_port_val, restaurant_ans, read_ans, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                        if(handling_answer == -1){
+                            char oops[4] = "oops";
+                            sendto(client_port_val, oops,strlen(4), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                        }else{
+                            sendto(client_port_val, restaurant_ans, read_ans, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                        }
                         FD_SET(client_port_val, &master_set);
                         ;
                     }
@@ -374,11 +465,13 @@ int main(int argc, char const *argv[]) {
                     else if(strcmp(input_r , "show ingredients\n") == 0){
                         char ing_amount[20] = "ingre and amount : \n";
                         write(1 , ing_amount , strlen(ing_amount));
-                        for(int j=0;j<recepies_num;j++){
+                        for(int j=0;j<ingres_num;j++){
                             if(0 < ingreds[j].number){
                                 write(1 , ingreds[j].name , strlen(ingreds[j].name ));
                                 write(1 , " " , 1);
-                                write(1 , ingreds[j].number , sizeof(int));
+                                char value_of_ingre[BUFFER_SIZE];
+                                sprintf(value_of_ingre,"%d",ingreds[j].number);
+                                write(1 , value_of_ingre , strlen(value_of_ingre));
                                 write(1 , "\n" , 1);
                             }
                         }
@@ -430,9 +523,9 @@ int main(int argc, char const *argv[]) {
                         sendto(connected_supp_fd, new_order, strlen(new_order), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
                         sendto(connected_supp_fd, send__fd, strlen(send__fd), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
                         FD_SET(connected_supp_fd, &master_set);
-                        signal(SIGALRM, alarm_handler);
-                        unsigned int second = 25;
-                        alarm(second);
+                        // signal(SIGALRM, alarm_handler);
+                        // unsigned int second = 25;
+                        // alarm(second);
                         
                     }
                     else if(input_r[0] == 'r'){
@@ -452,8 +545,36 @@ int main(int argc, char const *argv[]) {
                     if(strcmp(buffer , "yes\n") == 0){
                         int num = atoi(get_number_req);
                         impact_accept_ingred(num , get_name_req);
+                        char accepted[30] = "Request accepted!\n";
+                        write(1 , accepted , strlen(accepted));
+                    }else if(strcmp(buffer , "no\n") == 0){
+                        char rejected[30] = "Request rejected!\n";
+                        write(1 , rejected , strlen(rejected));
+                    }else if(buffer[0] == '*'){
+                        char* new_order_c = "\033[0;32mnew \033[0;37morder\n";
+                        // char* waiting = "waiting for respones\n";
+                        write(1 , new_order_c , strlen(new_order_c));
+
+                        order new_order;
+                        char port_name_str[4];
+                        for(int ci=0;ci<4;ci++){
+                            new_order.port[ci] = buffer[ci+1];
+                        }
+
+                        int fodd_length = bytes_received-6;
+
+                        new_order.food_name = (char*)realloc(new_order.food_name,fodd_length);
+                        for(int ci=0 ; ci<fodd_length ; ci++){
+                            new_order.food_name[ci] = buffer[ci+6];
+                        }
+                        
+                        orders[orders_index] = new_order;
+                        orders_index = (orders_index+1)%10;
+
+                    }else{
+                        write(1 , buffer , strlen(buffer));
                     }
-                    write(1 , buffer , bytes_received);
+                    
                     
                     ;
                 }
