@@ -11,6 +11,10 @@
 #include <stdio.h>
 #include <termio.h>
 #include <time.h>
+#include <fcntl.h> 
+#include <stdio.h> 
+#include <unistd.h> 
+#include "cJSON/cJSON.h"
 
 #define sever_port_val 7093
 #define BUFFER_SIZE 1024
@@ -104,13 +108,6 @@ char* client_port_show(int server_fd){
     return send_fd;
  }
 
-void alarm_handler(int sig){
-    char *buffer;
-    buffer = "\033[0;37mtime finished\n";
-
-    write(1 , buffer , strlen(buffer));
-    ;
-}
 
 int acceptClient(int server_fd) {
     int client_fd;
@@ -121,6 +118,43 @@ int acceptClient(int server_fd) {
     return client_fd;
 }
 
+
+void read_foods_file(){
+    int fd = open("recipes.json", O_RDONLY); 
+	if (fd == -1) { 
+        char* error = "Error: Unable to open the file.\n";
+		write(1,error,strlen(error)); 
+	} 
+	char buffer[10024]; 
+	int len = read(fd, buffer, 10024); 
+	cJSON *root = cJSON_Parse(buffer); 
+
+	cJSON *item;
+	cJSON *dish;
+    char* dash = "------------------\n";
+    write(1,dash,strlen(dash));
+    int num=1;
+	cJSON_ArrayForEach(item,root){
+
+		const char* dish_name = item->string;
+
+		char fd_str[40];
+        snprintf(fd_str , sizeof(fd_str) , "%d" , num);
+        char send_fd[BUFFER_SIZE] = "";
+        strcat(send_fd , fd_str);
+        strcat(send_fd , ". \033[0;35m");
+        strcat(send_fd , dish_name);
+        strcat(send_fd ,"\033[0;37m\n");
+        write(1 , send_fd , strlen(send_fd));
+        memset(fd_str,0,40);
+        memset(send_fd,0,1024);
+        num = num+1;
+	}
+    
+    write(1,dash,strlen(dash));
+	cJSON_Delete(root); 
+	close(fd);
+}
 
 
 int main(int argc, char const *argv[]) {
@@ -196,13 +230,6 @@ int main(int argc, char const *argv[]) {
                     FD_SET(new_socket, &master_set);
                     if (new_socket > max_sd)
                         max_sd = new_socket;
-
-                    // printf("New restaurant connected. fd = %d\n", new_socket);
-                    // memset(buffer, 0, 1024);
-                    // int bytes_readed = recv(0, buffer, 1024,0);
-                    // buffer[bytes_readed] = '\0';
-                    // sendto(new_socket, buffer, sizeof(bytes_readed), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
-                    
                 }
 
                 else if(i == udp_sock){
@@ -222,8 +249,22 @@ int main(int argc, char const *argv[]) {
 
                         
                         sendto(connected_server_fd, send_fd, strlen(send_fd), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
-                    }else{
+                    }else if(buffer[0] == 'r'){
+                        ;
+                    }
+                    else if(buffer[0] == 'c'){
+                        buffer[0]=' ';
+                        write(1 , buffer , bytes_readed);
+                    }else if(strcmp(buffer , "username and port : \n") == 0){
+                        write(1 , "username and port : \n",22);
+                    
+                    }else if(buffer[0] == 'w'){
                         write(1  , buffer , bytes_readed);
+                    }
+                    
+                    
+                    else{
+                        // write(1  , buffer , bytes_readed);
                     }
                 }
 
@@ -233,21 +274,17 @@ int main(int argc, char const *argv[]) {
                     int bytes_input_r = read(0,input_r,BUFFER_SIZE);
                     input_r[bytes_input_r ] = '\0';
                     welcome_r[7] = '\0';
-                    // if(input_r == "show restaurants"){
-                    //     char fd_str[40];
-                    //     snprintf(fd_str , sizeof(fd_str) , "%d" , connected_server_fd);
-                    //     char send_fd[BUFFER_SIZE] = "s ";
-                    //     strcat(send_fd , fd_str);
-                    //     strcat(send_fd , "\n");
-                        
-                    //     sendto(connected_server_fd, send_fd, sizeof(send_fd), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
-                    // }
 
                     if(strcmp(input_r , "show restaurants\n") == 0){
                         char username[BUFFER_SIZE] = "username and port : \n";
-                        
                         sendto(udp_sock, username, BUFFER_SIZE, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
-                        // sendto()
+
+                    }
+                    else if(strcmp(input_r , "show menu\n") == 0){
+                        read_foods_file();
+                    }
+                    else if(strcmp(input_r , "request list\n") == 0){
+                        ;
                     }
 
                     else if(strcmp(input_r , "order food\n") == 0){
@@ -272,9 +309,9 @@ int main(int argc, char const *argv[]) {
                         write(1 , waiting , strlen(waiting));
                         sendto(connected_server_fd, new_order, strlen(new_order), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
 
-                        // signal(SIGALRM, alarm_handler);
-                        // unsigned int second = 55;
-                        // alarm(second);
+                        signal(SIGALRM, alarm_handler);
+                        unsigned int second = 25;
+                        alarm(second);
                         FD_SET(connected_server_fd, &master_set);
                     }
                     else if(strcmp(welcome_r , "welcome") == 0){
