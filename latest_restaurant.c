@@ -62,7 +62,7 @@ int connectServer(int port)
 
     if (connect(fd, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
     { // checking for errors
-        printf("Error in connecting to server\n");
+        write(1,"Error connection\n",17);
     }
 
     return fd;
@@ -104,7 +104,8 @@ struct welome_name get_usename(){
 
 
 
-
+char client_port_name[BUFFER_SIZE];
+int client_port_val;
 
 
 int main(int argc, char const *argv[]) {
@@ -173,10 +174,10 @@ int main(int argc, char const *argv[]) {
                         max_sd = new_socket;
 
                     printf("New client connected. fd = %d\n", new_socket);
-                    memset(buffer, 0, 1024);
-                    int bytes_readed = recv(0, buffer, 1024,0);
-                    buffer[bytes_readed] = '\0';
-                    sendto(new_socket, buffer, sizeof(bytes_readed), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                    // memset(buffer, 0, 1024);
+                    // int bytes_readed = recv(0, buffer, 1024,0);
+                    // buffer[bytes_readed] = '\0';
+                    // sendto(new_socket, buffer, sizeof(bytes_readed), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
                 }
                 else if(i == udp_sock){
                     memset(buffer, 0, 1024);
@@ -199,14 +200,41 @@ int main(int argc, char const *argv[]) {
                     }
                     else if(strcmp(buffer , "request list\n") == 0){
                             ;
+                    }else{
+                        write(1 , buffer , bytes_readed);
                     }
-                    write(1 , buffer , bytes_readed);
                 }
 
                 else if(i == 0){
                     char input_r[BUFFER_SIZE] ;
                     int bytes_input_r = read(0,input_r,BUFFER_SIZE);
                     input_r[bytes_input_r] = '\0';
+                    if(strcmp(input_r , "answer request\n") == 0){
+                        memset(client_port_name , 0 , BUFFER_SIZE);
+                        
+                        char* get_request = "\033[0;34mport \033[0;37mof request: " ;
+                        write(1 , get_request , strlen(get_request));
+                        int read_name = read(0 , client_port_name , BUFFER_SIZE);
+                        client_port_name[read_name - 1] = '\0';
+
+                        
+                        
+                        client_port_val = atoi(client_port_name);
+                        client_port_val = connectServer(client_port_val);
+
+                        char* req_ans_show = "your answer is(\033[0;32myes\033[0;37m/\033[0;31mno\033[0;37m) : ";
+                        write(1 , req_ans_show , strlen(req_ans_show));
+
+                        char restaurant_ans[BUFFER_SIZE];
+                        int read_ans = read(0 , restaurant_ans , BUFFER_SIZE);
+                        restaurant_ans[read_ans] = '\0';
+
+
+                        sendto(client_port_val, restaurant_ans, read_ans, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                        FD_SET(client_port_val, &master_set);
+                        ;
+                    }
+
                     if(strcmp(input_r , "request list\n") == 0){
                         sendto(udp_sock, input_r, bytes_input_r, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
                         ;
@@ -223,20 +251,22 @@ int main(int argc, char const *argv[]) {
                     // write(1 , input_r , BUFFER_SIZE)
                     ;
                 }
+
+
+
+                // else if(i == client_port_val){
+                //     memset(buffer, 0, 1024);
+                //     int bytes_readed = recv(0, buffer, 1024,0);
+                //     buffer[bytes_readed] = '\0';
+                //     write(1 , buffer , bytes_readed);
+                // }
                 
                 else { 
                     // client sending msg
                     memset(buffer, 0, 1024);
                     int bytes_received;
                     bytes_received = recv(i , buffer, 1024, 0);
-                    
-                    if (bytes_received == 0) { // EOF
-                        printf("client fd = %d closed\n", i);
-                        close(i);
-                        FD_CLR(i, &master_set);
-                        continue;
-                    }
-
+                    buffer[bytes_received] = '\0';
                     write(1 , buffer , bytes_received);
                     
                     ;
