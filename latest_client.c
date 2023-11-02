@@ -10,18 +10,28 @@
 #include <sys/ioctl.h>
 #include <stdio.h>
 #include <termio.h>
+#include <time.h>
 
 #define sever_port_val 7093
 #define BUFFER_SIZE 1024
 
 int input_locked = 0;
 
-int setupServer(int port) {
+struct server_fd_port{
+    int fd;
+    int port;
+};
+
+struct server_fd_port setupServer() {
+    srand(time(NULL));
     struct sockaddr_in address;
+    struct server_fd_port my_server_info;
     int server_fd;
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
     int opt = 1;
+    int port ;
+    port = 2024 + rand()%1000;
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
     
     address.sin_family = AF_INET;
@@ -30,9 +40,13 @@ int setupServer(int port) {
 
     bind(server_fd, (struct sockaddr *)&address, sizeof(address));
     
+    my_server_info.fd = server_fd;
+    my_server_info.port = port;
+    
     listen(server_fd, 4);
 
-    return server_fd;
+    write(1, "Server is running\n", 18);
+    return my_server_info;
 }
 
 int connectServer(int port)
@@ -48,7 +62,7 @@ int connectServer(int port)
 
     if (connect(fd, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
     { // checking for errors
-        printf("Error in connecting to server\n");
+        write(1,"Error connection\n",17);
     }
 
     return fd;
@@ -91,12 +105,26 @@ char* client_port_show(int server_fd){
  }
 
 void alarm_handler(int sig){
-    if(input_locked)
-        input_locked =0;
+    char *buffer;
+    buffer = "\033[0;37mtime finished\n";
+
+    write(1 , buffer , strlen(buffer));
+    ;
+}
+
+int acceptClient(int server_fd) {
+    int client_fd;
+    struct sockaddr_in client_address;
+    int address_len = sizeof(client_address);
+    client_fd = accept(server_fd, (struct sockaddr *)&client_address, (socklen_t*) &address_len);
+
+    return client_fd;
 }
 
 
+
 int main(int argc, char const *argv[]) {
+    int new_socket;
     int port = atoi(argv[1]);
     int udp_sock, broadcast = 1, opt = 1;
     int client_port = 2048 + rand()%1000;
@@ -112,14 +140,17 @@ int main(int argc, char const *argv[]) {
     /// set
 
     fd_set master_set,working_set;
+    int port_tcp,server_fd,max_sd;
 
-    int server_fd,max_sd;
-    server_fd = setupServer(sever_port_val);
+    struct server_fd_port fd_port;
+    fd_port = setupServer();
+    server_fd = fd_port.fd;
+    port_tcp = fd_port.port;
     
 
     FD_ZERO(&master_set);
 
-    char buffer[1024] = {0};
+    char buffer[BUFFER_SIZE] = {0};
     struct sockaddr_in bc_address;
 
     udp_sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -145,8 +176,9 @@ int main(int argc, char const *argv[]) {
     char food_name[BUFFER_SIZE];
     static char port_number[BUFFER_SIZE];
     int connected_server_port , connected_server_fd;
-
+    
     while (1) {
+        
         working_set = master_set;
         select(max_sd + 1, &working_set, NULL, NULL, NULL);
 
@@ -159,13 +191,27 @@ int main(int argc, char const *argv[]) {
        
         for (int i = 0; i <= max_sd; i++) {
             if (FD_ISSET(i, &working_set)) {
-                if(i == udp_sock){
+                if(i == server_fd){
+                    new_socket = acceptClient(server_fd);
+                    FD_SET(new_socket, &master_set);
+                    if (new_socket > max_sd)
+                        max_sd = new_socket;
+
+                    // printf("New restaurant connected. fd = %d\n", new_socket);
+                    // memset(buffer, 0, 1024);
+                    // int bytes_readed = recv(0, buffer, 1024,0);
+                    // buffer[bytes_readed] = '\0';
+                    // sendto(new_socket, buffer, sizeof(bytes_readed), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+                    
+                }
+
+                else if(i == udp_sock){
                     memset(buffer, 0, 1024);
                     int bytes_readed = recv(udp_sock, buffer, 1024,0);
                     // write(1, "\033[0;35m" , 8);
                     if(strcmp(buffer , "request list\n") == 0){
                         char fd_str[40];
-                        snprintf(fd_str , sizeof(fd_str) , "%d" , client_port);
+                        snprintf(fd_str , sizeof(fd_str) , "%d" , port_tcp);
                         char send_fd[BUFFER_SIZE] = "";
                         strcat(send_fd , name);
                         strcat(send_fd , " ");
@@ -179,9 +225,6 @@ int main(int argc, char const *argv[]) {
                     }else{
                         write(1  , buffer , bytes_readed);
                     }
-                }
-                else if(i == server_fd){
-
                 }
 
                 else if(i == 0){
@@ -225,38 +268,66 @@ int main(int argc, char const *argv[]) {
                         connected_server_port = atoi(port_number);
                         connected_server_fd = connectServer(connected_server_port);
                         char* new_order = "\033[0;32mnew \033[0;37morder\n";
+                        char* waiting = "waiting for respones\n";
+                        write(1 , waiting , strlen(waiting));
                         sendto(connected_server_fd, new_order, strlen(new_order), 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
+
+                        // signal(SIGALRM, alarm_handler);
+                        // unsigned int second = 55;
+                        // alarm(second);
                         FD_SET(connected_server_fd, &master_set);
                     }
                     else if(strcmp(welcome_r , "welcome") == 0){
                         sendto(udp_sock, input_r, bytes_input_r, 0,(struct sockaddr *)&bc_address, sizeof(bc_address));
                     }
+                    else if(strcmp(welcome_r , "yes") == 0){
+                        ;
+                    }
+                    else if(strcmp(welcome_r , "no") == 0){
+                        ;
+                    }
                     
                     else{
-                        ;
+                        char* unvalid = "unvalid input\n";
+                        write(1 , unvalid , strlen(unvalid));;
                     }
                     // write(1 , input_r , bytes_input_r);
                     
                 }
                 else if(i == 1){
-                    // write(1 , input_r , BUFFER_SIZE)
-                    ;
-                }
-                
-                else { 
-                    // client sending msg
+                    // memset(buffer, 0, 1024);
                     // int bytes_received;
-                    // bytes_received = recv(i , buffer, 1024, 0);
-                    
+                    // bytes_received = recv(connected_server_fd , buffer, 1024, 0);
+                    // buffer[bytes_received-1] = '\0';
                     // if (bytes_received == 0) { // EOF
                     //     printf("client fd = %d closed\n", i);
                     //     close(i);
                     //     FD_CLR(i, &master_set);
                     //     continue;
                     // }
+                    
 
-                    // printf("client %d: %s\n", i, buffer);
-                    // memset(buffer, 0, 1024);
+                    // write(1 , buffer , bytes_received);
+                    // ;
+                }
+                
+                else { 
+                    memset(buffer, 0, 1024);
+                    int bytes_received;
+                    bytes_received = recv(i , buffer, 1024, 0);
+                    buffer[bytes_received] = '\0';
+                    if(strcmp(buffer , "yes\n") == 0){
+                        close(i);
+                        char* req_ac = "req accepted\n";
+                        write(1 , req_ac , strlen(req_ac));
+                    }else if(strcmp(buffer , "no\n") == 0){
+                        close(i);
+                        char* req_ac = "req rejected\n";
+                        write(1 , req_ac , strlen(req_ac));
+                    }else{
+                        write(1 , buffer , bytes_received);
+                    }
+                    
                     ;
                 }
             }
